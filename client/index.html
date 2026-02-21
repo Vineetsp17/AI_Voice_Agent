@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Voice AI Assistant</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark">
+
+<div class="layout">
+
+    <div class="sidebar">
+        <h3>Chats</h3>
+        <button onclick="createNewChat()">+ New Chat</button>
+        <div id="chat-list"></div>
+    </div>
+
+    <div class="main">
+
+        <div class="header">
+            <h2>Voice AI Assistant</h2>
+            <div id="status">● Disconnected</div>
+        </div>
+
+        <div id="chat-container"></div>
+
+        <div class="controls">
+            <button onclick="startConversation()">Start</button>
+            <button onclick="clearCurrentChat()">Clear</button>
+            <button onclick="toggleTheme()">Theme</button>
+        </div>
+
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

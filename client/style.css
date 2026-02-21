@@ -1,0 +1,152 @@
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body.dark {
+    background-color: #343541;
+    color: white;
+}
+
+body.light {
+    background-color: #f7f7f8;
+    color: #111;
+}
+
+/* Layout */
+
+.layout {
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar */
+
+.sidebar {
+    width: 260px;
+    background-color: #202123;
+    padding: 15px;
+    overflow-y: auto;
+    transition: all 0.3s ease;
+}
+
+.sidebar button {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 15px;
+    background-color: #10a37f;
+    border: none;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* Chat List Items */
+
+.chat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.chat-item:hover {
+    background-color: #3c3f4b;
+}
+
+.chat-item.active {
+    background-color: #444654;
+}
+
+.chat-title {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.delete-btn {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.chat-item:hover .delete-btn {
+    opacity: 1;
+}
+
+/* Main */
+
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+#chat-container {
+    flex: 1;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+}
+
+/* Messages */
+
+.message {
+    margin-bottom: 15px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    max-width: 75%;
+}
+
+.user {
+    background-color: #444654;
+    margin-left: auto;
+}
+
+.bot {
+    background-color: #3c3f4b;
+}
+
+/* Controls */
+
+.controls {
+    display: flex;
+    gap: 10px;
+}
+
+.controls button {
+    flex: 1;
+    padding: 10px;
+    background-color: #10a37f;
+    border: none;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* Cursor animation */
+
+.cursor {
+    display: inline-block;
+    width: 6px;
+    background: currentColor;
+    margin-left: 3px;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%,100% { opacity: 0 }
+    50% { opacity: 1 }
+}
