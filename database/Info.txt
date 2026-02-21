@@ -1,0 +1,1 @@
+This folder stores the conversations data and can be viewed using SQLite
