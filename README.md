@@ -20,10 +20,10 @@ It integrates:
 
 The system allows users to:
 
-1.  🎤 Speak naturally\
-2.  🧠 Receive intelligent AI responses\
-3.  🔊 Hear responses via voice playback\
-4.  💾 Store structured data\
+1.  🎤 Speak naturally
+2.  🧠 Receive intelligent AI responses
+3.  🔊 Hear responses via voice playback
+4.  💾 Store structured data
 5.  💬 Manage multiple chat sessions
 
 ------------------------------------------------------------------------
