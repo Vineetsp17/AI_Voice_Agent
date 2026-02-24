@@ -21,7 +21,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 PORT = int(os.environ.get("PORT", 8765))
 
-deepgram = DeepgramClient(DEEPGRAM_API_KEY)
+deepgram = DeepgramClient(api_key=DEEPGRAM_API_KEY)
 groq_client = Groq(api_key=GROQ_API_KEY)
 
 init_db()
@@ -116,3 +116,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
