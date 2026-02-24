@@ -1,6 +1,11 @@
-/* =========================
-   GLOBAL STATE
-========================= */
+/* ========================
+   PRODUCTION CONFIG
+======================== */
+
+const BACKEND_URL =
+    window.location.hostname === "localhost"
+        ? "ws://localhost:8765"
+        : "wss://YOUR_RENDER_BACKEND_URL";
 
 let socket = null;
 let currentAudio = null;
@@ -9,9 +14,9 @@ let typingSpeed = 100;
 let chats = JSON.parse(localStorage.getItem("chats")) || {};
 let currentChatId = localStorage.getItem("currentChatId") || null;
 
-/* =========================
-   INITIAL LOAD
-========================= */
+/* ========================
+   INIT
+======================== */
 
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -25,137 +30,23 @@ document.addEventListener("DOMContentLoaded", () => {
     loadCurrentChat();
 });
 
-/* =========================
-   CHAT SESSION MANAGEMENT
-========================= */
-
-function createNewChat() {
-    const id = "chat_" + Date.now();
-
-    chats[id] = {
-        title: "New Chat",
-        messages: []
-    };
-
-    currentChatId = id;
-    saveChats();
-    renderChatList();
-    loadCurrentChat();
-}
-
-function switchChat(id) {
-    currentChatId = id;
-    saveChats();
-    renderChatList();
-    loadCurrentChat();
-}
-
-function deleteChat(id) {
-    delete chats[id];
-
-    const remaining = Object.keys(chats);
-
-    if (remaining.length === 0) {
-        createNewChat();
-        return;
-    }
-
-    if (currentChatId === id) {
-        currentChatId = remaining[0];
-    }
-
-    saveChats();
-    renderChatList();
-    loadCurrentChat();
-}
-
-function renameChat(id) {
-    const newName = prompt("Rename chat:", chats[id].title);
-    if (newName && newName.trim() !== "") {
-        chats[id].title = newName.trim();
-        saveChats();
-        renderChatList();
-    }
-}
-
-function renderChatList() {
-    const list = document.getElementById("chat-list");
-    list.innerHTML = "";
-
-    Object.keys(chats).forEach(id => {
-
-        const chat = chats[id];
-
-        const item = document.createElement("div");
-        item.className = "chat-item" + (id === currentChatId ? " active" : "");
-
-        const title = document.createElement("div");
-        title.className = "chat-title";
-        title.innerText = chat.title;
-        title.ondblclick = () => renameChat(id);
-
-        const deleteBtn = document.createElement("div");
-        deleteBtn.className = "delete-btn";
-        deleteBtn.innerText = "🗑";
-        deleteBtn.onclick = (e) => {
-            e.stopPropagation();
-            deleteChat(id);
-        };
-
-        item.onclick = () => switchChat(id);
-
-        item.appendChild(title);
-        item.appendChild(deleteBtn);
-        list.appendChild(item);
-    });
-}
-
-function loadCurrentChat() {
-    const container = document.getElementById("chat-container");
-    container.innerHTML = "";
-
-    chats[currentChatId].messages.forEach(msg => {
-        addMessageInstant(msg.sender, msg.text, msg.type, false);
-    });
-}
-
-function clearCurrentChat() {
-    chats[currentChatId].messages = [];
-    chats[currentChatId].title = "New Chat";
-    saveChats();
-    renderChatList();
-    loadCurrentChat();
-}
-
-function saveChats() {
-    localStorage.setItem("chats", JSON.stringify(chats));
-    localStorage.setItem("currentChatId", currentChatId);
-}
-
-/* =========================
-   START CONVERSATION (MIC FIXED)
-========================= */
+/* ========================
+   START CONVERSATION
+======================== */
 
 function startConversation() {
 
-    if (socket && socket.readyState === WebSocket.OPEN) {
-        console.log("Already connected");
-        return;
-    }
+    if (socket && socket.readyState === WebSocket.OPEN) return;
 
-    socket = new WebSocket("ws://127.0.0.1:8765");
+    socket = new WebSocket(BACKEND_URL);
 
     socket.onopen = () => {
         updateStatus("Connected");
-        setupAudioStreaming(); // 🔥 triggers mic popup
+        setupAudioRecording();
     };
 
     socket.onclose = () => {
         updateStatus("Disconnected");
-    };
-
-    socket.onerror = (err) => {
-        console.error("WebSocket error:", err);
     };
 
     socket.onmessage = (event) => {
@@ -163,7 +54,6 @@ function startConversation() {
         const data = JSON.parse(event.data);
 
         if (data.type === "transcript") {
-            stopCurrentAudio();
             addMessageInstant("You", data.text, "user");
         }
 
@@ -177,48 +67,30 @@ function startConversation() {
     };
 }
 
-/* =========================
-   AUDIO STREAMING
-========================= */
+/* ========================
+   AUDIO RECORDING (MediaRecorder)
+======================== */
 
-async function setupAudioStreaming() {
+async function setupAudioRecording() {
 
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-        const audioContext = new AudioContext({ sampleRate: 16000 });
-        const source = audioContext.createMediaStreamSource(stream);
-        const processor = audioContext.createScriptProcessor(4096, 1, 1);
+    const mediaRecorder = new MediaRecorder(stream);
 
-        processor.onaudioprocess = function (e) {
-            const input = e.inputBuffer.getChannelData(0);
+    mediaRecorder.ondataavailable = async (event) => {
 
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(convertFloat32ToInt16(input));
-            }
-        };
+        if (event.data.size > 0) {
+            const arrayBuffer = await event.data.arrayBuffer();
+            socket.send(arrayBuffer);
+        }
+    };
 
-        source.connect(processor);
-        processor.connect(audioContext.destination);
-
-    } catch (err) {
-        console.error("Mic permission error:", err);
-        alert("Please allow microphone access.");
-    }
+    mediaRecorder.start(2000); // send every 2 sec
 }
 
-function convertFloat32ToInt16(buffer) {
-    let l = buffer.length;
-    let buf = new Int16Array(l);
-    while (l--) {
-        buf[l] = Math.min(1, buffer[l]) * 0x7FFF;
-    }
-    return buf.buffer;
-}
-
-/* =========================
+/* ========================
    MESSAGE RENDERING
-========================= */
+======================== */
 
 function addMessageInstant(sender, text, type, save = true) {
 
@@ -232,7 +104,6 @@ function addMessageInstant(sender, text, type, save = true) {
     container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
 
     if (save) {
-
         chats[currentChatId].messages.push({ sender, text, type });
 
         if (type === "user" && chats[currentChatId].title === "New Chat") {
@@ -297,9 +168,9 @@ function addMessageTypewriter(sender, text) {
     typeWord();
 }
 
-/* =========================
+/* ========================
    AUDIO PLAYBACK
-========================= */
+======================== */
 
 function playAudio(base64Audio) {
     stopCurrentAudio();
@@ -315,9 +186,9 @@ function stopCurrentAudio() {
     }
 }
 
-/* =========================
-   THEME + STATUS
-========================= */
+/* ========================
+   UTIL
+======================== */
 
 function toggleTheme() {
     if (document.body.className === "dark") {
