@@ -5,7 +5,7 @@
 const BACKEND_URL =
     window.location.hostname === "localhost"
         ? "ws://localhost:8765"
-        : "https://ai-voice-agent-goyi.onrender.com";
+        : "wss://ai-voice-agent-u1mp.onrender.com";
 
 let socket = null;
 let currentAudio = null;
@@ -203,4 +203,5 @@ function toggleTheme() {
 function updateStatus(text) {
     document.getElementById("status").innerText = "● " + text;
 }
+
 
