@@ -1,7 +1,7 @@
-websockets
-groq
-python-dotenv
-deepgram-sdk
-aiohttp
 fastapi
-
+uvicorn[standard]
+websockets
+deepgram-sdk
+python-dotenv
+httpx
+groq
