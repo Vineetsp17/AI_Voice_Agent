@@ -1,6 +1,6 @@
-/* ========================
-   PRODUCTION CONFIG
-======================== */
+// ============================
+// BACKEND URL (Production Safe)
+// ============================
 
 const BACKEND_URL =
     window.location.hostname === "localhost"
@@ -8,202 +8,196 @@ const BACKEND_URL =
         : "wss://ai-voice-agent-u1mp.onrender.com/ws";
 
 let socket = null;
-let currentAudio = null;
-let typingSpeed = 100;
+let mediaRecorder = null;
+let audioStream = null;
+let isRecording = false;
 
-let chats = JSON.parse(localStorage.getItem("chats")) || {};
-let currentChatId = localStorage.getItem("currentChatId") || null;
+const connectionIndicator = document.querySelector("#connectionStatus");
+const startBtn = document.querySelector("#startBtn");
+const clearBtn = document.querySelector("#clearBtn");
+const chatContainer = document.querySelector("#chatContainer");
 
-/* ========================
-   INIT
-======================== */
+// ============================
+// Connection Status UI
+// ============================
 
-document.addEventListener("DOMContentLoaded", () => {
+function setStatus(status) {
+    if (!connectionIndicator) return;
+    connectionIndicator.textContent = status;
 
-    document.body.className = localStorage.getItem("theme") || "dark";
-
-    if (!currentChatId || !chats[currentChatId]) {
-        createNewChat();
-    }
-
-    renderChatList();
-    loadCurrentChat();
-});
-
-/* ========================
-   START CONVERSATION
-======================== */
-
-function startConversation() {
-
-    if (socket && socket.readyState === WebSocket.OPEN) return;
-
-    socket = new WebSocket(BACKEND_URL);
-
-    socket.onopen = () => {
-        updateStatus("Connected");
-        setupAudioRecording();
-    };
-
-    socket.onclose = () => {
-        updateStatus("Disconnected");
-    };
-
-    socket.onmessage = (event) => {
-
-        const data = JSON.parse(event.data);
-
-        if (data.type === "transcript") {
-            addMessageInstant("You", data.text, "user");
-        }
-
-        if (data.type === "bot_response") {
-            addMessageTypewriter("Bot", data.text);
-        }
-
-        if (data.type === "tts_audio") {
-            playAudio(data.audio);
-        }
-    };
-}
-
-/* ========================
-   AUDIO RECORDING (MediaRecorder)
-======================== */
-
-async function setupAudioRecording() {
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-    const mediaRecorder = new MediaRecorder(stream);
-
-    mediaRecorder.ondataavailable = async (event) => {
-
-        if (event.data.size > 0) {
-            const arrayBuffer = await event.data.arrayBuffer();
-            socket.send(arrayBuffer);
-        }
-    };
-
-    mediaRecorder.start(2000); // send every 2 sec
-}
-
-/* ========================
-   MESSAGE RENDERING
-======================== */
-
-function addMessageInstant(sender, text, type, save = true) {
-
-    const container = document.getElementById("chat-container");
-
-    const msg = document.createElement("div");
-    msg.className = `message ${type}`;
-    msg.innerHTML = `<strong>${sender}:</strong> ${marked.parseInline(text)}`;
-
-    container.appendChild(msg);
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-
-    if (save) {
-        chats[currentChatId].messages.push({ sender, text, type });
-
-        if (type === "user" && chats[currentChatId].title === "New Chat") {
-            chats[currentChatId].title =
-                text.slice(0, 30) + (text.length > 30 ? "..." : "");
-        }
-
-        saveChats();
-        renderChatList();
-    }
-}
-
-function addMessageTypewriter(sender, text) {
-
-    const container = document.getElementById("chat-container");
-
-    const msg = document.createElement("div");
-    msg.className = "message bot";
-    msg.innerHTML =
-        `<strong>${sender}:</strong> 
-         <span class="content"></span>
-         <span class="cursor"></span>`;
-
-    container.appendChild(msg);
-
-    const content = msg.querySelector(".content");
-    const cursor = msg.querySelector(".cursor");
-
-    const words = text.split(" ");
-    let index = 0;
-
-    function typeWord() {
-
-        if (index < words.length) {
-
-            content.innerHTML = marked.parseInline(
-                words.slice(0, index + 1).join(" ")
-            );
-
-            container.scrollTo({
-                top: container.scrollHeight,
-                behavior: "smooth"
-            });
-
-            index++;
-            setTimeout(typeWord, typingSpeed);
-
-        } else {
-
-            cursor.remove();
-
-            chats[currentChatId].messages.push({
-                sender,
-                text,
-                type: "bot"
-            });
-
-            saveChats();
-        }
-    }
-
-    typeWord();
-}
-
-/* ========================
-   AUDIO PLAYBACK
-======================== */
-
-function playAudio(base64Audio) {
-    stopCurrentAudio();
-    currentAudio = new Audio("data:audio/wav;base64," + base64Audio);
-    currentAudio.play();
-}
-
-function stopCurrentAudio() {
-    if (currentAudio) {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        currentAudio = null;
-    }
-}
-
-/* ========================
-   UTIL
-======================== */
-
-function toggleTheme() {
-    if (document.body.className === "dark") {
-        document.body.className = "light";
-        localStorage.setItem("theme", "light");
+    if (status === "Connected") {
+        connectionIndicator.style.color = "#00ff88";
+    } else if (status === "Connecting") {
+        connectionIndicator.style.color = "#ffaa00";
     } else {
-        document.body.className = "dark";
-        localStorage.setItem("theme", "dark");
+        connectionIndicator.style.color = "#ff4444";
     }
 }
 
-function updateStatus(text) {
-    document.getElementById("status").innerText = "● " + text;
+// ============================
+// Start Conversation
+// ============================
+
+async function startConversation() {
+    if (isRecording) return;
+
+    try {
+        setStatus("Connecting");
+
+        audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+        });
+
+        socket = new WebSocket(BACKEND_URL);
+
+        // ✅ Only start recording AFTER socket opens
+        socket.onopen = () => {
+            console.log("WebSocket OPEN");
+            setStatus("Connected");
+
+            mediaRecorder = new MediaRecorder(audioStream, {
+                mimeType: "audio/webm",
+            });
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (
+                    event.data.size > 0 &&
+                    socket &&
+                    socket.readyState === WebSocket.OPEN
+                ) {
+                    socket.send(event.data);
+                }
+            };
+
+            mediaRecorder.start(250);
+            isRecording = true;
+        };
+
+        socket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.channel?.alternatives?.[0]?.transcript) {
+                    const transcript =
+                        data.channel.alternatives[0].transcript;
+
+                    if (transcript.trim() !== "") {
+                        addMessage("You", transcript);
+                    }
+                }
+            } catch (err) {
+                console.log("Message parse error:", err);
+            }
+        };
+
+        socket.onclose = () => {
+            console.log("WebSocket CLOSED");
+            stopRecording();
+            setStatus("Disconnected");
+        };
+
+        socket.onerror = (error) => {
+            console.error("WebSocket ERROR:", error);
+            stopRecording();
+            setStatus("Disconnected");
+        };
+    } catch (err) {
+        console.error("Mic error:", err);
+        setStatus("Disconnected");
+    }
 }
 
+// ============================
+// Stop Recording Safely
+// ============================
 
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+    }
 
+    if (audioStream) {
+        audioStream.getTracks().forEach((track) => track.stop());
+    }
 
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.close();
+    }
+
+    mediaRecorder = null;
+    audioStream = null;
+    socket = null;
+    isRecording = false;
+}
+
+// ============================
+// Chat UI
+// ============================
+
+function addMessage(sender, text) {
+    if (!chatContainer) return;
+
+    const messageDiv = document.createElement("div");
+    messageDiv.classList.add("message");
+
+    const label = document.createElement("strong");
+    label.textContent = sender + ": ";
+
+    const content = document.createElement("span");
+    content.innerHTML = renderMarkdown(text);
+
+    messageDiv.appendChild(label);
+    messageDiv.appendChild(content);
+
+    chatContainer.appendChild(messageDiv);
+
+    smoothScroll();
+}
+
+// ============================
+// Markdown Support (Basic)
+// ============================
+
+function renderMarkdown(text) {
+    return text
+        .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+        .replace(/\*(.*?)\*/g, "<i>$1</i>")
+        .replace(/`(.*?)`/g, "<code>$1</code>")
+        .replace(/\n/g, "<br>");
+}
+
+// ============================
+// Smooth Auto Scroll
+// ============================
+
+function smoothScroll() {
+    chatContainer.scrollTo({
+        top: chatContainer.scrollHeight,
+        behavior: "smooth",
+    });
+}
+
+// ============================
+// Clear Chat
+// ============================
+
+if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+        chatContainer.innerHTML = "";
+    });
+}
+
+// ============================
+// Start Button
+// ============================
+
+if (startBtn) {
+    startBtn.addEventListener("click", () => {
+        if (!isRecording) {
+            startConversation();
+        } else {
+            stopRecording();
+            setStatus("Disconnected");
+        }
+    });
+}
