@@ -1,17 +1,24 @@
 import os
-import json
 import asyncio
-from fastapi import FastAPI, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 import websockets
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
-from tools import extract_structured_data
-from llm import get_llm_response
+# ✅ Correct package-style imports for Render
+from server.tools import extract_structured_data
 
+# =========================
+# Environment Variables
+# =========================
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 PORT = int(os.getenv("PORT", 8000))
 
+if not DEEPGRAM_API_KEY:
+    raise Exception("DEEPGRAM_API_KEY not set in environment variables")
+
+# =========================
+# FastAPI App
+# =========================
 app = FastAPI()
 
 app.add_middleware(
@@ -22,29 +29,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# =========================
+# Health Check Route
+# =========================
 @app.get("/")
-async def root():
-    return {"status": "AI Voice Agent Running"}
+async def health_check():
+    return {"status": "AI Voice Agent Backend Running"}
 
+# =========================
+# WebSocket Endpoint
+# =========================
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("Client connected")
 
-    async with websockets.connect(
-        "wss://api.deepgram.com/v1/listen",
-        extra_headers={"Authorization": f"Token {DEEPGRAM_API_KEY}"}
-    ) as dg_ws:
+    try:
+        async with websockets.connect(
+            "wss://api.deepgram.com/v1/listen",
+            extra_headers={
+                "Authorization": f"Token {DEEPGRAM_API_KEY}"
+            },
+        ) as dg_ws:
 
-        async def receive_from_deepgram():
-            async for message in dg_ws:
-                await websocket.send_text(message)
+            print("Connected to Deepgram")
 
-        asyncio.create_task(receive_from_deepgram())
+            async def receive_from_deepgram():
+                try:
+                    async for message in dg_ws:
+                        await websocket.send_text(message)
+                except Exception as e:
+                    print("Deepgram receive error:", e)
 
-        while True:
-            data = await websocket.receive_bytes()
-            await dg_ws.send(data)
+            deepgram_task = asyncio.create_task(receive_from_deepgram())
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+            while True:
+                try:
+                    data = await websocket.receive_bytes()
+                    await dg_ws.send(data)
+                except WebSocketDisconnect:
+                    print("Client disconnected")
+                    break
+
+            deepgram_task.cancel()
+
+    except Exception as e:
+        print("WebSocket error:", e)
